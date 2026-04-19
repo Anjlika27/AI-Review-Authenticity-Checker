@@ -5,6 +5,10 @@
   <title>Prediction - AI Review Authenticity Checker</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>window.scrollTo(0, 0);</script>
+  {% if loading %}
+  <!-- Auto refresh every 10 seconds while model loads -->
+  <meta http-equiv="refresh" content="10">
+  {% endif %}
 </head>
 <body>
   <nav>
@@ -21,12 +25,20 @@
   <main>
     <div class="prediction-container">
 
-      {% if loading %}
+      {% if error %}
+        <div class="result-card" style="background:#fef2f2; border:2px solid #dc2626;">
+          <span class="result-emoji">❌</span>
+          <h3 style="color:#dc2626;">Model failed to load</h3>
+          <p class="confidence">{{ error }}</p>
+        </div>
+
+      {% elif loading %}
         <div class="result-card" style="background:#fefce8; border:2px solid #ca8a04;">
           <span class="result-emoji">⏳</span>
           <h3 style="color:#ca8a04;">Model is still loading...</h3>
-          <p class="confidence">Please wait a moment and refresh the page.</p>
+          <p class="confidence">This page will refresh automatically every 10 seconds.</p>
         </div>
+
       {% else %}
         <form method="POST" action="/prediction">
           <textarea name="review"
