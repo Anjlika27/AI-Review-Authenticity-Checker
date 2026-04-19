@@ -2,5 +2,5 @@ services:
   - type: web
     name: ai-review-authenticity-checker
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --timeout 120
+    buildCommand: pip install -r requirements.txt && python train.py
+    startCommand: gunicorn app:app
