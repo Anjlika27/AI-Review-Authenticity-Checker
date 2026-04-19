@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contact - AI Review Authenticity Checker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>window.scrollTo(0, 0);</script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, getDocs,
+      doc, updateDoc, deleteDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey:            "AIzaSyBtnGNYnBxLgyrmDEMW2gXgELC70d4ZmZo",
+      authDomain:        "ai-review-authenticity-checker.firebaseapp.com",
+      projectId:         "ai-review-authenticity-checker",
+      storageBucket:     "ai-review-authenticity-checker.firebasestorage.app",
+      messagingSenderId: "955146281963",
+      appId:             "1:955146281963:web:08cbc4b5d93a3a4333efae"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const COL = "contacts";
+
+    // ── Helpers ───────────────────────────────────────────────────────
+    function showStatus(msg, isError = false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className   = isError ? 'status-error' : 'status-ok';
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3500);
+    }
+
+    function renderMessages(docs) {
+      const list = document.getElementById('message-list');
+      list.innerHTML = '';
+      if (docs.size === 0) {
+        list.innerHTML = '<p class="no-messages">No messages yet.</p>';
+        return;
+      }
+      docs.forEach(d => {
+        const data = d.data();
+        const card = document.createElement('div');
+        card.className = 'msg-card';
+        card.innerHTML = `
+          <div class="msg-header">
+            <span class="msg-name">${data.name}</span>
+            <span class="msg-email">${data.email}</span>
+          </div>
+          <p class="msg-body">${data.message}</p>
+          <div class="msg-actions">
+            <button class="btn-edit"   onclick="window.startEdit('${d.id}', this)">✏️ Edit</button>
+            <button class="btn-delete" onclick="window.deleteMsg('${d.id}')">🗑️ Delete</button>
+          </div>
+          <div class="edit-form" id="edit-${d.id}" style="display:none;">
+            <textarea id="edit-msg-${d.id}">${data.message}</textarea>
+            <button onclick="window.saveEdit('${d.id}')">💾 Save</button>
+            <button onclick="window.cancelEdit('${d.id}')">✖ Cancel</button>
+          </div>`;
+        list.appendChild(card);
+      });
+    }
+
+    // ── CREATE ────────────────────────────────────────────────────────
+    window.submitForm = async () => {
+      const name    = document.getElementById('name').value.trim();
+      const email   = document.getElementById('email').value.trim();
+      const message = document.getElementById('message').value.trim();
+
+      if (!name || !email || !message) {
+        showStatus('Please fill in all fields.', true);
+        return;
+      }
+      try {
+        await addDoc(collection(db, COL), {
+          name, email, message, createdAt: serverTimestamp()
+        });
+        document.getElementById('name').value    = '';
+        document.getElementById('email').value   = '';
+        document.getElementById('message').value = '';
+        showStatus('Message sent successfully! ✅');
+        await loadMessages();
+      } catch (e) {
+        showStatus('Error: ' + e.message, true);
+      }
+    };
+
+    // ── READ ──────────────────────────────────────────────────────────
+    async function loadMessages() {
+      try {
+        const snap = await getDocs(collection(db, COL));
+        renderMessages(snap);
+      } catch (e) {
+        document.getElementById('message-list').innerHTML =
+          `<p class="status-error">Could not load messages: ${e.message}</p>`;
+      }
+    }
+
+    // ── UPDATE ────────────────────────────────────────────────────────
+    window.startEdit = (id, btn) => {
+      document.getElementById(`edit-${id}`).style.display = 'block';
+      btn.style.display = 'none';
+    };
+    window.cancelEdit = (id) => {
+      document.getElementById(`edit-${id}`).style.display = 'none';
+    };
+    window.saveEdit = async (id) => {
+      const newMsg = document.getElementById(`edit-msg-${id}`).value.trim();
+      if (!newMsg) { showStatus('Message cannot be empty.', true); return; }
+      try {
+        await updateDoc(doc(db, COL, id), { message: newMsg });
+        showStatus('Message updated ✅');
+        await loadMessages();
+      } catch (e) {
+        showStatus('Update failed: ' + e.message, true);
+      }
+    };
+
+    // ── DELETE ────────────────────────────────────────────────────────
+    window.deleteMsg = async (id) => {
+      if (!confirm('Delete this message?')) return;
+      try {
+        await deleteDoc(doc(db, COL, id));
+        showStatus('Message deleted.');
+        await loadMessages();
+      } catch (e) {
+        showStatus('Delete failed: ' + e.message, true);
+      }
+    };
+
+    // Load messages when page is ready
+    document.addEventListener('DOMContentLoaded', loadMessages);
+  </script>
+</head>
+<body>
+  <nav>
+    <a href="/">About</a>
+    <a href="/prediction">Prediction</a>
+    <a href="/contact">Contact</a>
+  </nav>
+
+  <header>
+    <h1>Contact Us</h1>
+    <p>Have any questions or feedback? We'd love to hear from you!</p>
+  </header>
+
+  <main class="info-section">
+
+    <h2>Send a Message</h2>
+    <div id="status" style="display:none;"></div>
+
+    <!-- CREATE -->
+    <div class="contact-form-wrap">
+      <label for="name">Your Name:</label>
+      <input type="text" id="name" placeholder="Jane Doe" required>
+
+      <label for="email">Your Email:</label>
+      <input type="email" id="email" placeholder="jane@example.com" required>
+
+      <label for="message">Your Message:</label>
+      <textarea id="message" rows="4" placeholder="Write your message here..." required></textarea>
+
+      <button onclick="submitForm()">Send Message</button>
+    </div>
+
+    <!-- READ -->
+    <h2 style="margin-top:40px;">Message History</h2>
+    <p style="color:#555; margin-bottom:16px;">
+      All submitted messages are stored in Firebase Firestore. You can edit or delete any entry below.
+    </p>
+    <div id="message-list">
+      <p>Loading messages...</p>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>&copy; Made by Anjlika Anand</p>
+  </footer>
+</body>
+</html>
