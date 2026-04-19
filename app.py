@@ -1,6 +1,6 @@
 """
 app.py — Flask backend for AI Review Authenticity Checker
-Model trains in a background thread so the port binds immediately.
+Uses LinearSVC (much faster + lighter than SVC) for deployment.
 """
 
 from flask import Flask, render_template, request
@@ -12,7 +12,8 @@ from nltk.corpus import stopwords
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
+from sklearn.calibration import CalibratedClassifierCV
 
 nltk.download('stopwords', quiet=True)
 
@@ -25,30 +26,40 @@ def preprocess_text(text):
 # Global model variable
 MODEL = None
 MODEL_READY = False
+MODEL_ERROR = None
 
 def train_model():
-    global MODEL, MODEL_READY
-    print("Training SVM model in background...")
-    df = pd.read_csv('dataset.csv')
-    df.drop('Unnamed: 0', axis=1, inplace=True)
-    df.dropna(inplace=True)
+    global MODEL, MODEL_READY, MODEL_ERROR
+    try:
+        print("Loading dataset...")
+        df = pd.read_csv('dataset.csv')
+        df.drop('Unnamed: 0', axis=1, inplace=True)
+        df.dropna(inplace=True)
 
-    X = df['text_']
-    y = df['label']
+        # Use only 60% of data to save memory on free tier
+        df = df.sample(frac=0.6, random_state=42).reset_index(drop=True)
+        print(f"Training on {len(df)} samples...")
 
-    X_train, _, y_train, _ = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y
-    )
+        X = df['text_']
+        y = df['label']
 
-    pipeline = Pipeline([
-        ('bow',   CountVectorizer(analyzer=preprocess_text)),
-        ('tfidf', TfidfTransformer()),
-        ('clf',   SVC(kernel='linear', C=1.0, probability=True, random_state=42))
-    ])
-    pipeline.fit(X_train, y_train)
-    MODEL = pipeline
-    MODEL_READY = True
-    print("Model trained and ready ✓")
+        X_train, _, y_train, _ = train_test_split(
+            X, y, test_size=0.25, random_state=42, stratify=y
+        )
+
+        # LinearSVC is 10x faster and uses much less memory than SVC
+        pipeline = Pipeline([
+            ('bow',   CountVectorizer(analyzer=preprocess_text, max_features=20000)),
+            ('tfidf', TfidfTransformer()),
+            ('clf',   CalibratedClassifierCV(LinearSVC(max_iter=1000)))
+        ])
+        pipeline.fit(X_train, y_train)
+        MODEL = pipeline
+        MODEL_READY = True
+        print("Model trained and ready ✓")
+    except Exception as e:
+        MODEL_ERROR = str(e)
+        print(f"Model training failed: {e}")
 
 # Start training in background thread
 thread = threading.Thread(target=train_model)
@@ -67,11 +78,19 @@ def prediction():
     result = None
     review_text = ''
 
+    if MODEL_ERROR:
+        return render_template('prediction.html',
+                               result=None,
+                               review_text='',
+                               loading=False,
+                               error=MODEL_ERROR)
+
     if not MODEL_READY:
         return render_template('prediction.html',
                                result=None,
                                review_text='',
-                               loading=True)
+                               loading=True,
+                               error=None)
 
     if request.method == 'POST':
         review_text = request.form.get('review', '').strip()
@@ -96,7 +115,8 @@ def prediction():
     return render_template('prediction.html',
                            result=result,
                            review_text=review_text,
-                           loading=False)
+                           loading=False,
+                           error=None)
 
 @app.route('/contact')
 def contact():
