@@ -20,9 +20,14 @@ def preprocess_text(text):
 
 print("Loading dataset...")
 df = pd.read_csv('dataset.csv')
-df.drop('Unnamed: 0', axis=1, inplace=True)
+
+# Drop unnamed index column only if it exists
+if 'Unnamed: 0' in df.columns:
+    df.drop('Unnamed: 0', axis=1, inplace=True)
+
 df.dropna(inplace=True)
 print(f"Dataset: {len(df)} rows")
+print(f"Labels: {df['label'].value_counts().to_dict()}")
 
 df['clean'] = df['text_'].apply(preprocess_text)
 X = df['clean']
