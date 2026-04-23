@@ -16,7 +16,7 @@ def preprocess_text(text):
     return ' '.join(w for w in cleaned.split() if w.lower() not in STOP_WORDS)
 
 print("Loading model...")
-with open('svm_model.pkl', 'rb') as f:
+with open('model.pkl', 'rb') as f:
     MODEL = pickle.load(f)
 print("Model loaded ✓")
 
